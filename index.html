@@ -622,7 +622,11 @@
 
   function applyRange(){
     var w = piano.getBoundingClientRect().width || window.innerWidth;
-    var touchLayout = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+    // Some mobile browsers report a fine primary pointer (for example when
+    // accessibility or a connected mouse is present). Keep the mobile key
+    // count control active whenever the device also supports touch.
+    var touchLayout = (window.matchMedia && window.matchMedia('(pointer: coarse)').matches)
+      || (navigator.maxTouchPoints > 0);
     var oldMaxScroll = Math.max(0, piano.scrollWidth - piano.clientWidth);
     var scrollRatio = oldMaxScroll ? piano.scrollLeft / oldMaxScroll : 0;
     rangeMod.hidden = !touchLayout;

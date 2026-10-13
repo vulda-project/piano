@@ -97,7 +97,6 @@
     cursor:pointer;touch-action:manipulation;
   }
   select{max-width:120px;}
-  .range-nav{flex:none;min-width:27px;padding:5px 7px;}
   .range-readout{display:block;min-width:0;text-align:center;color:var(--ink);font-size:11px;white-space:nowrap;}
   .range-mod .row select{flex:1;min-width:0;width:auto;max-width:100%;}
   button:hover,select:hover{border-color:rgba(210,245,240,.5);}
@@ -152,6 +151,10 @@
     padding:7px 7px 0;
     touch-action:none;user-select:none;-webkit-user-select:none;
   }
+  .piano-track{position:relative;display:flex;flex:none;width:100%;height:100%;}
+  .piano.scrollable{overflow-x:auto;overscroll-behavior-x:contain;touch-action:pan-x;scrollbar-width:none;}
+  .piano.scrollable::-webkit-scrollbar{display:none;}
+  .piano-track.scrollable .white{flex:0 0 var(--white-key-width);min-width:var(--white-key-width);}
 
   .key{position:relative;cursor:pointer;}
   .lbl{
@@ -314,18 +317,18 @@
       </div>
 
       <div class="mod range-mod" id="rangeMod" hidden>
-        <span>표시 옥타브 · 건반을 좌우로 밀어 이동</span>
+        <span>화면에 표시할 흰 건반 수</span>
         <div class="row">
-          <button class="range-nav" id="rangePrev" aria-label="낮은 옥타브로 이동">‹</button>
-          <select id="rangeSelect" aria-label="화면에 표시할 옥타브 수">
-            <option value="1">1옥타브</option>
-            <option value="2" selected>2옥타브</option>
-            <option value="3">3옥타브</option>
-            <option value="4">4옥타브</option>
+          <select id="rangeSelect" aria-label="화면에 표시할 흰 건반 수">
+            <option value="8">8개 · 넓게</option>
+            <option value="12">12개</option>
+            <option value="15" selected>15개</option>
+            <option value="19">19개</option>
+            <option value="22">22개</option>
+            <option value="29">전체 29개</option>
           </select>
-          <button class="range-nav" id="rangeNext" aria-label="높은 옥타브로 이동">›</button>
         </div>
-        <span class="range-readout" id="rangeLabel" aria-live="polite"></span>
+        <span class="range-readout" id="rangeLabel" aria-live="polite">건반을 좌우로 밀어 이동</span>
       </div>
 
       <div class="mod">
@@ -350,7 +353,7 @@
 
   <div class="keybed">
     <div class="strip"></div>
-    <div class="piano" id="piano"></div>
+    <div class="piano" id="piano"><div class="piano-track" id="pianoTrack"></div></div>
     <div class="hint">
       <div><b>흰건반</b> <kbd>Z</kbd><kbd>X</kbd><kbd>C</kbd><kbd>V</kbd><kbd>B</kbd><kbd>N</kbd><kbd>M</kbd> · 윗줄 <kbd>Q</kbd><kbd>W</kbd><kbd>E</kbd><kbd>R</kbd><kbd>T</kbd><kbd>Y</kbd><kbd>U</kbd></div>
       <div><b>검은건반</b> <kbd>S</kbd><kbd>D</kbd><kbd>G</kbd><kbd>H</kbd><kbd>J</kbd> · <kbd>2</kbd><kbd>3</kbd><kbd>5</kbd><kbd>6</kbd><kbd>7</kbd></div>
@@ -501,6 +504,7 @@
 
   /* ---------- 건반 ---------- */
   var piano = document.getElementById('piano');
+  var pianoTrack = document.getElementById('pianoTrack');
   var keyEls = new Map();
 
   function rangeFor(w){
@@ -512,37 +516,18 @@
   var rangeMod = document.getElementById('rangeMod');
   var rangeSelect = document.getElementById('rangeSelect');
   var rangeLabel = document.getElementById('rangeLabel');
-  var mobileStart = 60;
+  var visibleWhiteCount = parseInt(rangeSelect.value, 10);
 
-  function midiName(m){ return NOTE_ABC[m % 12] + (Math.floor(m / 12) - 1); }
   function updateRangeControls(){
-    var span = parseInt(rangeSelect.value, 10) * 12;
-    var maxStart = GLOBAL_END - span;
-    rangePrev.disabled = mobileStart <= GLOBAL_START;
-    rangeNext.disabled = mobileStart >= maxStart;
-    rangePrev.style.opacity = rangePrev.disabled ? .35 : 1;
-    rangeNext.style.opacity = rangeNext.disabled ? .35 : 1;
-    rangeLabel.textContent = midiName(START) + '–' + midiName(END);
+    rangeLabel.textContent = '건반을 좌우로 밀어 이동';
   }
-  function moveMobileRange(direction){
-    var span = parseInt(rangeSelect.value, 10) * 12;
-    var maxStart = GLOBAL_END - span;
-    mobileStart = Math.max(GLOBAL_START, Math.min(maxStart, mobileStart + direction * 12));
-    mobileStart = GLOBAL_START + Math.round((mobileStart - GLOBAL_START) / 12) * 12;
-    applyRange();
-  }
-  var rangePrev = document.getElementById('rangePrev');
-  var rangeNext = document.getElementById('rangeNext');
-  rangePrev.addEventListener('click', function(){ moveMobileRange(-1); });
-  rangeNext.addEventListener('click', function(){ moveMobileRange(1); });
   rangeSelect.addEventListener('change', function(){
-    var span = parseInt(rangeSelect.value, 10) * 12;
-    mobileStart = Math.min(60, GLOBAL_END - span);
+    visibleWhiteCount = parseInt(rangeSelect.value, 10);
     applyRange();
   });
 
   function buildKeys(){
-    piano.textContent = '';
+    pianoTrack.textContent = '';
     keyEls.clear();
     for (var m = START; m <= END; m++){
       var el = document.createElement('div');
@@ -551,7 +536,7 @@
       var s = document.createElement('span');
       s.className = 'lbl';
       el.appendChild(s);
-      piano.appendChild(el);
+      pianoTrack.appendChild(el);
       keyEls.set(m, el);
     }
   }
@@ -638,11 +623,10 @@
   function applyRange(){
     var w = piano.getBoundingClientRect().width || window.innerWidth;
     var touchLayout = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+    var oldMaxScroll = Math.max(0, piano.scrollWidth - piano.clientWidth);
+    var scrollRatio = oldMaxScroll ? piano.scrollLeft / oldMaxScroll : 0;
     rangeMod.hidden = !touchLayout;
-    var span = parseInt(rangeSelect.value, 10) * 12;
-    var maxStart = GLOBAL_END - span;
-    mobileStart = Math.max(GLOBAL_START, Math.min(maxStart, mobileStart));
-    var r = touchLayout ? [mobileStart, mobileStart + span] : rangeFor(w);
+    var r = touchLayout ? [GLOBAL_START, GLOBAL_END] : rangeFor(w);
     if (r[0] !== START || r[1] !== END){
       allOff();
       START = r[0]; END = r[1];
@@ -650,13 +634,28 @@
       clampBase();
       renderLabels();
     }
+    piano.classList.toggle('scrollable', touchLayout);
+    pianoTrack.classList.toggle('scrollable', touchLayout);
+    if (touchLayout){
+      var whites = 0;
+      keyEls.forEach(function(_, midi){ if (!isBlack(midi)) whites++; });
+      var style = window.getComputedStyle(piano);
+      var available = piano.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+      var whiteWidth = Math.max(1, available / visibleWhiteCount);
+      pianoTrack.style.setProperty('--white-key-width', whiteWidth + 'px');
+      pianoTrack.style.width = (whites * whiteWidth + Math.max(0, whites - 1) * 2) + 'px';
+    } else {
+      pianoTrack.style.width = '100%';
+      pianoTrack.style.removeProperty('--white-key-width');
+      piano.scrollLeft = 0;
+    }
     layout();
+    if (touchLayout) piano.scrollLeft = scrollRatio * Math.max(0, piano.scrollWidth - piano.clientWidth);
     updateRangeControls();
   }
 
   /* ---------- 입력 ---------- */
   var pointers = new Map();
-  var swipePointers = new Map();
 
   function velocityFrom(el, clientY){
     var r = el.getBoundingClientRect();
@@ -683,39 +682,27 @@
   piano.addEventListener('pointerdown', function(e){
     var key = e.target.closest ? e.target.closest('.key') : null;
     if (!key) return;
-    e.preventDefault();
     var m = parseInt(key.dataset.midi, 10);
     var vel = velocityFrom(key, e.clientY);
     if (lockMode){
+      e.preventDefault();
       if (locked.has(m)){ locked.delete(m); held.delete(m); noteOff(m); }
       else { locked.add(m); press(m, vel); }
       return;
     }
-    try { piano.setPointerCapture(e.pointerId); } catch(err){}
     if (e.pointerType === 'touch'){
-      swipePointers.set(e.pointerId, {midi:m, x:e.clientX, y:e.clientY, moved:false});
+      pointers.set(e.pointerId, m);
+      press(m, vel);
       return;
     }
+    e.preventDefault();
+    try { piano.setPointerCapture(e.pointerId); } catch(err){}
     pointers.set(e.pointerId, m);
     press(m, vel);
   }, {passive:false});
 
   piano.addEventListener('pointermove', function(e){
-    if (swipePointers.has(e.pointerId)){
-      var gesture = swipePointers.get(e.pointerId);
-      var dx = e.clientX - gesture.x, dy = e.clientY - gesture.y;
-      if (!gesture.moved && Math.abs(dx) > 24 && Math.abs(dx) > Math.abs(dy) * 1.15){
-        gesture.moved = true;
-        gesture.x = e.clientX;
-        gesture.y = e.clientY;
-        moveMobileRange(dx < 0 ? 1 : -1);
-      } else if (Math.abs(dy) > 24 && Math.abs(dy) > Math.abs(dx)){
-        swipePointers.delete(e.pointerId);
-        pointers.set(e.pointerId, gesture.midi);
-        press(gesture.midi, 0.8);
-      }
-      return;
-    }
+    if (e.pointerType === 'touch') return;
     if (lockMode || !pointers.has(e.pointerId)) return;
     var key = keyAt(e.clientX, e.clientY);
     var m = key ? parseInt(key.dataset.midi, 10) : null;
@@ -728,15 +715,6 @@
   }, {passive:false});
 
   function endPointer(e){
-    if (swipePointers.has(e.pointerId)){
-      var gesture = swipePointers.get(e.pointerId);
-      swipePointers.delete(e.pointerId);
-      if (!gesture.moved && e.type === 'pointerup'){
-        press(gesture.midi, 0.85);
-        setTimeout(function(){ lift(gesture.midi); }, 140);
-      }
-      return;
-    }
     if (!pointers.has(e.pointerId)) return;
     lift(pointers.get(e.pointerId));
     pointers.delete(e.pointerId);

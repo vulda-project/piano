@@ -97,8 +97,9 @@
     cursor:pointer;touch-action:manipulation;
   }
   select{max-width:120px;}
-  .range-nav{min-width:27px;padding:5px 7px;}
-  .range-readout{min-width:46px;text-align:center;color:var(--ink);font-size:11px;white-space:nowrap;}
+  .range-nav{flex:none;min-width:27px;padding:5px 7px;}
+  .range-readout{display:block;min-width:0;text-align:center;color:var(--ink);font-size:11px;white-space:nowrap;}
+  .range-mod .row select{flex:1;min-width:0;width:auto;max-width:100%;}
   button:hover,select:hover{border-color:rgba(210,245,240,.5);}
   button:active{transform:translateY(1px);}
   :focus-visible{outline:2px solid var(--rocker-hot);outline-offset:2px;}
@@ -312,7 +313,7 @@
         </div>
       </div>
 
-      <div class="mod" id="rangeMod" hidden>
+      <div class="mod range-mod" id="rangeMod" hidden>
         <span>표시 옥타브 · 건반을 좌우로 밀어 이동</span>
         <div class="row">
           <button class="range-nav" id="rangePrev" aria-label="낮은 옥타브로 이동">‹</button>
@@ -322,9 +323,9 @@
             <option value="3">3옥타브</option>
             <option value="4">4옥타브</option>
           </select>
-          <span class="range-readout" id="rangeLabel" aria-live="polite"></span>
           <button class="range-nav" id="rangeNext" aria-label="높은 옥타브로 이동">›</button>
         </div>
+        <span class="range-readout" id="rangeLabel" aria-live="polite"></span>
       </div>
 
       <div class="mod">
